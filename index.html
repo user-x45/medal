@@ -2,553 +2,493 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>トレジャー・コイン・ドロッパー</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wikipedia 検索</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        * {
-            box-sizing: border-box;
-            touch-action: manipulation;
-        }
-        html, body {
-            width: 100%;
-            height: 100%;
-            height: 100dvh;
-            margin: 0;
-            padding: 0;
+        /* カスタムスクロールバーとアニメーション */
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
             overflow: hidden;
-            user-select: none;
-            -webkit-user-select: none;
-            background-color: #0b0f19;
         }
-        /* 発光エフェクト */
-        .glow-gold {
-            box-shadow: 0 0 12px rgba(234, 179, 8, 0.5);
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
         }
     </style>
 </head>
-<body class="h-full w-full flex flex-col justify-between font-sans text-white antialiased">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans">
 
-    <!-- ヘッダー / UIパネル -->
-    <header class="w-full max-w-md mx-auto p-2 bg-slate-900/90 backdrop-blur border-b border-amber-500/30 flex justify-between items-center z-10 rounded-b-xl shadow-lg shrink-0">
-        <!-- クレジット (メダル所持数) -->
-        <div class="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-amber-500/50">
-            <span class="text-amber-400 text-base">🪙</span>
-            <div>
-                <div class="text-[9px] text-slate-400 font-bold leading-none">MEDALS</div>
-                <div id="medal-count" class="text-lg font-black text-amber-300 tracking-wider leading-tight">100</div>
-            </div>
-        </div>
-
-        <!-- スロットマシン -->
-        <div class="flex items-center gap-1 bg-black/80 px-2 py-1 rounded-lg border-2 border-amber-400 glow-gold">
-            <div id="slot1" class="w-7 h-8 bg-slate-800 rounded flex items-center justify-center text-base font-bold border border-slate-700">🍒</div>
-            <div id="slot2" class="w-7 h-8 bg-slate-800 rounded flex items-center justify-center text-base font-bold border border-slate-700">🎰</div>
-            <div id="slot3" class="w-7 h-8 bg-slate-800 rounded flex items-center justify-center text-base font-bold border border-slate-700">7️⃣</div>
-        </div>
-
-        <!-- JPポイントメーター & サウンドトグル -->
-        <div class="flex items-center gap-1.5">
-            <div class="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded-lg border border-blue-500/50">
-                <span class="text-blue-400 text-base">💎</span>
+    <!-- ヘッダー -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2 cursor-pointer" id="logoBtn">
+                <div class="bg-indigo-600 text-white p-2 rounded-lg shadow-md">
+                    <i data-lucide="book-open" class="w-6 h-6"></i>
+                </div>
                 <div>
-                    <div class="text-[9px] text-slate-400 font-bold leading-none">JP BONUS</div>
-                    <div id="jp-count" class="text-base font-black text-blue-300 tracking-wider leading-tight">0/10</div>
+                    <h1 class="text-xl font-bold tracking-tight text-slate-900">WikiSearch</h1>
+                    <p class="text-xs text-slate-500">Wikipedia 検索アプリ</p>
                 </div>
             </div>
-            <!-- ミュートボタン -->
-            <button id="sound-btn" class="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center justify-center border border-slate-600 text-sm active:scale-95 transition">
-                🔊
-            </button>
+
+            <!-- 検索バー（ヘッダー部） -->
+            <div class="w-full sm:w-auto flex-1 max-w-md">
+                <form id="searchForm" class="relative">
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Wikipedia内を検索..." 
+                        class="w-full pl-10 pr-10 py-2 bg-slate-100 hover:bg-slate-200/60 focus:bg-white rounded-full border border-transparent focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition duration-200 text-sm"
+                        required
+                    />
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <button 
+                        type="button" 
+                        id="clearBtn" 
+                        class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </form>
+            </div>
+
+            <!-- アクションボタン -->
+            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button 
+                    id="randomBtn" 
+                    class="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full text-xs font-medium transition duration-200"
+                    title="おまかせ表示（ランダム記事）"
+                >
+                    <i data-lucide="shuffle" class="w-3.5 h-3.5"></i>
+                    <span>おまかせ記事</span>
+                </button>
+            </div>
         </div>
     </header>
 
-    <!-- メイン3Dゲーム画面 (Canvas) -->
-    <main id="game-container" class="relative w-full max-w-md mx-auto flex-1 min-h-0 overflow-hidden flex items-center justify-center">
-        <!-- 中央のアナウンスメッセージOverlay -->
-        <div id="message-overlay" class="absolute top-1/3 pointer-events-none transition-all duration-300 opacity-0 transform scale-50 z-20 text-center">
-            <h1 id="message-title" class="text-3xl font-black italic text-yellow-300 drop-shadow-[0_4px_4px_rgba(0,0,0,0.9)]">JACKPOT!</h1>
-            <p id="message-sub" class="text-sm font-bold text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.9)]">+50 MEDALS</p>
+    <!-- メインコンテンツ -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-8">
+        <!-- 初期状態 / 検索前の状態 -->
+        <div id="welcomeState" class="text-center py-16 px-4">
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-indigo-50 text-indigo-600 mb-6">
+                <i data-lucide="globe" class="w-10 h-10"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-900 mb-2">知りたい情報を検索してみましょう</h2>
+            <p class="text-slate-500 max-w-md mx-auto mb-8 text-sm">
+                Wikipediaの膨大な知識データベースから記事を探すことができます。気になるキーワードを入力するか、人気のキーワードを選択してください。
+            </p>
+            
+            <!-- トレンドキーワード例 -->
+            <div class="flex flex-wrap items-center justify-center gap-2 max-w-lg mx-auto">
+                <span class="text-xs font-semibold text-slate-400 mr-1">例:</span>
+                <button class="tag-btn bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-600 text-xs px-3 py-1.5 rounded-full shadow-sm transition">人工知能</button>
+                <button class="tag-btn bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-600 text-xs px-3 py-1.5 rounded-full shadow-sm transition">宇宙探査</button>
+                <button class="tag-btn bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-600 text-xs px-3 py-1.5 rounded-full shadow-sm transition">日本の歴史</button>
+                <button class="tag-btn bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-600 text-xs px-3 py-1.5 rounded-full shadow-sm transition">量子力学</button>
+            </div>
         </div>
 
-        <!-- コイン投入ガイド -->
-        <div class="absolute bottom-1 left-0 right-0 flex justify-between px-4 pointer-events-none z-10 opacity-40 text-[10px] text-amber-300">
-            <span>◄ タップで投下位置調整</span>
-            <span>タップで投下位置調整 ►</span>
+        <!-- ローディング状態 -->
+        <div id="loadingState" class="hidden text-center py-20">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent mb-4"></div>
+            <p class="text-slate-500 text-sm">検索中...</p>
+        </div>
+
+        <!-- エラー状態 -->
+        <div id="errorState" class="hidden text-center py-16">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-50 text-red-500 mb-4">
+                <i data-lucide="alert-circle" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-800 mb-1" id="errorMessage">エラーが発生しました</h3>
+            <p class="text-slate-500 text-sm">ネットワーク接続を確認するか、しばらく経ってから再度お試しください。</p>
+        </div>
+
+        <!-- 検索結果件数表示 -->
+        <div id="resultMeta" class="hidden mb-6 flex items-center justify-between">
+            <p class="text-xs font-medium text-slate-500" id="resultCount">検索結果</p>
+        </div>
+
+        <!-- 検索結果グリッド -->
+        <div id="resultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- 検索結果アイテムがJSで追加されます -->
+        </div>
+
+        <!-- 件数ゼロの状態 -->
+        <div id="emptyState" class="hidden text-center py-16">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 text-slate-400 mb-4">
+                <i data-lucide="search-x" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-800 mb-1">一致する記事が見つかりませんでした</h3>
+            <p class="text-slate-500 text-sm">別のキーワードや、より一般的な単語で検索してみてください。</p>
         </div>
     </main>
 
-    <!-- フッター / コントローラー -->
-    <footer class="w-full max-w-md mx-auto p-2 bg-slate-900/90 backdrop-blur border-t border-slate-700 flex flex-col gap-2 z-10 rounded-t-xl shrink-0">
-        <!-- 投入位置指定スライダー -->
-        <div class="flex items-center gap-2 px-1">
-            <span class="text-[10px] font-bold text-slate-400 shrink-0">投入位置</span>
-            <input id="position-slider" type="range" min="-1.8" max="1.8" step="0.1" value="0" 
-                   class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400">
-        </div>
+    <!-- モーダル詳細ビュー -->
+    <div id="articleModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
+            <!-- モーダルヘッダー -->
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">Wikipedia プレビュー</span>
+                <button id="closeModalBtn" class="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
 
-        <!-- 投入ボタン -->
-        <div class="flex gap-2">
-            <button id="drop-btn" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 active:scale-95 font-black text-slate-900 text-lg rounded-xl shadow-lg border-b-4 border-amber-700 transition flex items-center justify-center gap-2 leading-none">
-                <span>🪙</span> メダルを投下！
-            </button>
-            <button id="auto-btn" class="px-3 py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold text-slate-300 text-xs rounded-xl border border-slate-600 transition flex flex-col items-center justify-center shrink-0">
-                <span class="text-[10px]">AUTO</span>
-                <span id="auto-status" class="text-[9px] text-slate-500 font-bold">OFF</span>
-            </button>
+            <!-- モーダルコンテンツ -->
+            <div class="p-6 overflow-y-auto space-y-4" id="modalContent">
+                <h2 id="modalTitle" class="text-2xl font-bold text-slate-900"></h2>
+                <div id="modalImageContainer" class="hidden my-4 rounded-xl overflow-hidden bg-slate-100 max-h-64 flex justify-center items-center border border-slate-100">
+                    <img id="modalImage" class="object-cover max-h-64 w-full" src="" alt="記事画像">
+                </div>
+                <div id="modalExtract" class="text-slate-600 text-sm leading-relaxed whitespace-pre-line"></div>
+            </div>
+
+            <!-- モーダル画像フッター -->
+            <div class="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <button id="modalCloseBottom" class="px-4 py-2 text-slate-600 hover:bg-slate-200/50 rounded-lg text-sm font-medium transition">
+                    閉じる
+                </button>
+                <a id="modalExternalLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-sm transition">
+                    <span>Wikipediaで続きを読む</span>
+                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- フッター -->
+    <footer class="bg-white border-t border-slate-200 py-6 mt-auto">
+        <div class="max-w-5xl mx-auto px-4 text-center text-xs text-slate-400">
+            <p>データ提供: <a href="https://www.wikipedia.org/" target="_blank" rel="noopener" class="underline hover:text-slate-600">Wikipedia API</a></p>
         </div>
     </footer>
 
-    <!-- ゲームロジック & Web Audio API -->
+    <!-- スクリプト部 -->
     <script>
-        window.onload = function() {
-            // === 0. Sound Engine (Web Audio API) ===
-            class SoundEngine {
-                constructor() {
-                    this.ctx = null;
-                    this.muted = false;
-                }
+        // Wikipedia API エンドポイント (日本語版)
+        const WIKI_API_URL = 'https://ja.wikipedia.org/w/api.php';
 
-                init() {
-                    if (!this.ctx) {
-                        const AudioContext = window.AudioContext || window.webkitAudioContext;
-                        this.ctx = new AudioContext();
-                    }
-                    if (this.ctx.state === 'suspended') {
-                        this.ctx.resume();
-                    }
-                }
+        // DOM要素の取得
+        const searchForm = document.getElementById('searchForm');
+        const searchInput = document.getElementById('searchInput');
+        const clearBtn = document.getElementById('clearBtn');
+        const randomBtn = document.getElementById('randomBtn');
+        const logoBtn = document.getElementById('logoBtn');
+        
+        const welcomeState = document.getElementById('welcomeState');
+        const loadingState = document.getElementById('loadingState');
+        const errorState = document.getElementById('errorState');
+        const emptyState = document.getElementById('emptyState');
+        const errorMessage = document.getElementById('errorMessage');
+        
+        const resultsGrid = document.getElementById('resultsGrid');
+        const resultMeta = document.getElementById('resultMeta');
+        const resultCount = document.getElementById('resultCount');
 
-                playTone(freq, type, duration, vol = 0.1) {
-                    if (this.muted || !this.ctx) return;
-                    try {
-                        const osc = this.ctx.createOscillator();
-                        const gain = this.ctx.createGain();
-                        osc.type = type;
-                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-                        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
-                        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
-                        osc.connect(gain);
-                        gain.connect(this.ctx.destination);
-                        osc.start();
-                        osc.stop(this.ctx.currentTime + duration);
-                    } catch(e) {}
-                }
+        const articleModal = document.getElementById('articleModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const modalCloseBottom = document.getElementById('modalCloseBottom');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalExtract = document.getElementById('modalExtract');
+        const modalImage = document.getElementById('modalImage');
+        const modalImageContainer = document.getElementById('modalImageContainer');
+        const modalExternalLink = document.getElementById('modalExternalLink');
 
-                playDrop() {
-                    this.playTone(600, 'sine', 0.08, 0.15);
-                }
+        // アイコン初期化
+        lucide.createIcons();
 
-                playHit() {
-                    this.playTone(1200 + Math.random() * 400, 'triangle', 0.05, 0.05);
-                }
-
-                playCoinGet() {
-                    if (this.muted || !this.ctx) return;
-                    this.playTone(987.77, 'sine', 0.1, 0.15); // B5
-                    setTimeout(() => this.playTone(1318.51, 'sine', 0.15, 0.15), 60); // E6
-                }
-
-                playSlotSpin() {
-                    this.playTone(400, 'square', 0.03, 0.03);
-                }
-
-                playWin() {
-                    if (this.muted || !this.ctx) return;
-                    const notes = [523.25, 659.25, 783.99, 1046.50]; // C E G C
-                    notes.forEach((freq, i) => {
-                        setTimeout(() => this.playTone(freq, 'triangle', 0.2, 0.2), i * 100);
-                    });
-                }
-
-                playJackpot() {
-                    if (this.muted || !this.ctx) return;
-                    const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
-                    notes.forEach((freq, i) => {
-                        setTimeout(() => this.playTone(freq, 'sine', 0.3, 0.25), i * 120);
-                    });
-                }
+        // イベントリスナーの登録
+        searchForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const query = searchInput.value.trim();
+            if (query) {
+                performSearch(query);
             }
+        });
 
-            const sound = new SoundEngine();
+        // 入力フォームクリアボタン
+        searchInput.addEventListener('input', () => {
+            if (searchInput.value.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        });
 
-            // === 1. ゲームの状態管理 ===
-            let medals = 100;
-            let jpBonus = 0;
-            let isAuto = false;
-            let autoInterval = null;
-            let isSlotSpinning = false;
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearBtn.classList.add('hidden');
+            searchInput.focus();
+        });
 
-            const medalCountEl = document.getElementById('medal-count');
-            const jpCountEl = document.getElementById('jp-count');
-            const sliderEl = document.getElementById('position-slider');
-            const dropBtn = document.getElementById('drop-btn');
-            const autoBtn = document.getElementById('auto-btn');
-            const autoStatusEl = document.getElementById('auto-status');
-            const soundBtn = document.getElementById('sound-btn');
-            const container = document.getElementById('game-container');
+        // ロゴクリックで初期状態に戻る
+        logoBtn.addEventListener('click', resetToWelcome);
 
-            soundBtn.addEventListener('click', () => {
-                sound.init();
-                sound.muted = !sound.muted;
-                soundBtn.textContent = sound.muted ? '🔇' : '🔊';
+        // トレンドタグクリック時の検索
+        document.querySelectorAll('.tag-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const term = button.textContent;
+                searchInput.value = term;
+                clearBtn.classList.remove('hidden');
+                performSearch(term);
+            });
+        });
+
+        // ランダム記事検索
+        randomBtn.addEventListener('click', fetchRandomArticle);
+
+        // モーダルを閉じる
+        closeModalBtn.addEventListener('click', closeModal);
+        modalCloseBottom.addEventListener('click', closeModal);
+        articleModal.addEventListener('click', (e) => {
+            if (e.target === articleModal) {
+                closeModal();
+            }
+        });
+
+        // ESCキーでモーダルを閉じる
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !articleModal.classList.contains('hidden')) {
+                closeModal();
+            }
+        });
+
+        // 初期表示にリセット
+        function resetToWelcome() {
+            searchInput.value = '';
+            clearBtn.classList.add('hidden');
+            welcomeState.classList.remove('hidden');
+            loadingState.classList.add('hidden');
+            errorState.classList.add('hidden');
+            emptyState.classList.add('hidden');
+            resultsGrid.classList.add('hidden');
+            resultMeta.classList.add('hidden');
+            resultsGrid.innerHTML = '';
+        }
+
+        // 表示状態の切り替えヘルパー
+        function showState(state) {
+            welcomeState.classList.add('hidden');
+            loadingState.classList.add('hidden');
+            errorState.classList.add('hidden');
+            emptyState.classList.add('hidden');
+            resultsGrid.classList.add('hidden');
+            resultMeta.classList.add('hidden');
+
+            if (state === 'loading') loadingState.classList.remove('hidden');
+            if (state === 'error') errorState.classList.remove('hidden');
+            if (state === 'empty') emptyState.classList.remove('hidden');
+            if (state === 'results') {
+                resultsGrid.classList.remove('hidden');
+                resultMeta.classList.remove('hidden');
+            }
+        }
+
+        // Wikipedia検索の実行 (JSONPによるクロスドメイン要求処理)
+        async function performSearch(query) {
+            showState('loading');
+
+            // APIパラメータ設定
+            const params = new URLSearchParams({
+                action: 'query',
+                generator: 'search',
+                gsrsearch: query,
+                gsrlimit: '15',
+                prop: 'pageimages|extracts',
+                exintro: '1',
+                explaintext: '1',
+                exsentences: '3',
+                piprop: 'thumbnail',
+                pithumbsize: '400',
+                format: 'json',
+                origin: '*'
             });
 
-            // === 2. Cannon.js & Three.js 初期化 ===
-            const world = new CANNON.World();
-            world.gravity.set(0, -18, 0);
-            world.broadphase = new CANNON.NaiveBroadphase();
-            world.solver.iterations = 10;
-
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0b0f19);
-
-            const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(0, 8, 9);
-            camera.lookAt(0, 1, -1);
-
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(container.clientWidth, container.clientHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            container.appendChild(renderer.domElement);
-
-            window.addEventListener('resize', () => {
-                camera.aspect = container.clientWidth / container.clientHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(container.clientWidth, container.clientHeight);
-            });
-
-            // ライティング
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-
-            const dirLight = new THREE.DirectionalLight(0xfff5ea, 0.8);
-            dirLight.position.set(5, 12, 7);
-            dirLight.castShadow = true;
-            dirLight.shadow.mapSize.width = 1024;
-            dirLight.shadow.mapSize.height = 1024;
-            scene.add(dirLight);
-
-            const pointLight = new THREE.PointLight(0xf59e0b, 1, 10);
-            pointLight.position.set(0, 4, -2);
-            scene.add(pointLight);
-
-            // 物理マテリアル
-            const physicsMaterial = new CANNON.Material("slipperyMaterial");
-            const coinContactMaterial = new CANNON.ContactMaterial(
-                physicsMaterial, physicsMaterial,
-                { friction: 0.15, restitution: 0.2 }
-            );
-            world.addContactMaterial(coinContactMaterial);
-
-            // === 3. フィールド構築 ===
-            const tableWidth = 5;
-            const tableDepth = 7;
-
-            // メイン床
-            const mainFloorShape = new CANNON.Box(new CANNON.Vec3(tableWidth / 2, 0.2, tableDepth / 2));
-            const mainFloorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
-            mainFloorBody.addShape(mainFloorShape);
-            mainFloorBody.position.set(0, -0.2, 0.5);
-            world.addBody(mainFloorBody);
-
-            const mainFloorGeo = new THREE.BoxGeometry(tableWidth, 0.4, tableDepth);
-            const tableMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2, metalness: 0.5 });
-            const mainFloorMesh = new THREE.Mesh(mainFloorGeo, tableMat);
-            mainFloorMesh.position.set(0, -0.2, 0.5);
-            mainFloorMesh.receiveShadow = true;
-            scene.add(mainFloorMesh);
-
-            // プッシャー
-            const pusherWidth = tableWidth - 0.2;
-            const pusherHeight = 0.8;
-            const pusherDepth = 3;
-
-            const pusherShape = new CANNON.Box(new CANNON.Vec3(pusherWidth / 2, pusherHeight / 2, pusherDepth / 2));
-            const pusherBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
-            pusherBody.addShape(pusherShape);
-            pusherBody.position.set(0, 0.4, -2.5);
-            world.addBody(pusherBody);
-
-            const pusherGeo = new THREE.BoxGeometry(pusherWidth, pusherHeight, pusherDepth);
-            const pusherMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.1, metalness: 0.8 });
-            const pusherMesh = new THREE.Mesh(pusherGeo, pusherMat);
-            pusherMesh.position.copy(pusherBody.position);
-            pusherMesh.castShadow = true;
-            pusherMesh.receiveShadow = true;
-            scene.add(pusherMesh);
-
-            // 壁
-            const wallShape = new CANNON.Box(new CANNON.Vec3(0.1, 1, tableDepth / 2 + 1));
-            const leftWallBody = new CANNON.Body({ mass: 0 });
-            leftWallBody.addShape(wallShape);
-            leftWallBody.position.set(-tableWidth / 2 - 0.1, 0.8, 0);
-            world.addBody(leftWallBody);
-
-            const rightWallBody = new CANNON.Body({ mass: 0 });
-            rightWallBody.addShape(wallShape);
-            rightWallBody.position.set(tableWidth / 2 + 0.1, 0.8, 0);
-            world.addBody(rightWallBody);
-
-            const wallGeo = new THREE.BoxGeometry(0.1, 1.5, tableDepth + 2);
-            const wallMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, roughness: 0.1 });
-            const leftWallMesh = new THREE.Mesh(wallGeo, wallMat);
-            leftWallMesh.position.copy(leftWallBody.position);
-            scene.add(leftWallMesh);
-
-            const rightWallMesh = new THREE.Mesh(wallGeo, wallMat);
-            rightWallMesh.position.copy(rightWallBody.position);
-            scene.add(rightWallMesh);
-
-            // スロットチャッカー
-            const chackerGeo = new THREE.BoxGeometry(1.2, 0.1, 0.4);
-            const chackerMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0x7f1d1d });
-            const chackerMesh = new THREE.Mesh(chackerGeo, chackerMat);
-            chackerMesh.position.set(0, 0.05, 3.2);
-            scene.add(chackerMesh);
-
-            // === 4. コイン制御 ===
-            const coins = [];
-            const coinRadius = 0.35;
-            const coinHeight = 0.08;
-
-            const coinGeo = new THREE.CylinderGeometry(coinRadius, coinRadius, coinHeight, 20);
-            const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.2 });
-            const blueMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.8, roughness: 0.2 });
-
-            function createCoin(x, y, z, type = 'normal') {
-                const coinShape = new CANNON.Cylinder(coinRadius, coinRadius, coinHeight, 16);
-                const q = new CANNON.Quaternion();
-                q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
-
-                const coinBody = new CANNON.Body({
-                    mass: 0.3,
-                    material: physicsMaterial,
-                    linearDamping: 0.3,
-                    angularDamping: 0.3
-                });
-                coinBody.addShape(coinShape, new CANNON.Vec3(), q);
-                coinBody.position.set(x, y, z);
-                coinBody.quaternion.setFromEuler((Math.random() - 0.5) * 0.1, Math.random() * Math.PI, (Math.random() - 0.5) * 0.1);
-
-                // 衝突音リスナー
-                coinBody.addEventListener("collide", (e) => {
-                    if (Math.abs(e.contact.getVelocity().z) > 0.5) {
-                        sound.playHit();
-                    }
-                });
-
-                world.addBody(coinBody);
-
-                const coinMesh = new THREE.Mesh(coinGeo, type === 'blue' ? blueMat : goldMat);
-                coinMesh.castShadow = true;
-                coinMesh.receiveShadow = true;
-                scene.add(coinMesh);
-
-                coins.push({ body: coinBody, mesh: coinMesh, type: type });
-            }
-
-            function initCoins() {
-                for (let i = 0; i < 35; i++) {
-                    const x = (Math.random() - 0.5) * (tableWidth - 0.8);
-                    const z = Math.random() * (tableDepth / 2) + 0.5;
-                    createCoin(x, 0.2 + (i * 0.02), z);
+            try {
+                const response = await fetch(`${WIKI_API_URL}?${params.toString()}`);
+                if (!response.ok) {
+                    throw new Error('ネットワーク応答が正常ではありませんでした');
                 }
-                for (let i = 0; i < 12; i++) {
-                    const x = (Math.random() - 0.5) * (tableWidth - 1.2);
-                    const z = -3 + Math.random() * 1.0;
-                    createCoin(x, 1.0 + (i * 0.02), z);
-                }
-            }
-            initCoins();
+                
+                const data = await response.json();
 
-            // === 5. ゲームロジック ===
-            function dropCoin() {
-                sound.init();
-                if (medals <= 0) {
-                    showMessage("MEDALS EMPTY!", "メダルがなくなりました");
-                    if (isAuto) toggleAuto();
+                if (!data.query || !data.query.pages) {
+                    showState('empty');
                     return;
                 }
 
-                medals--;
-                updateUI();
-                sound.playDrop();
+                // オブジェクト形式のレスポンスを配列に変換
+                const pages = Object.values(data.query.pages);
+                // 検索順序で並び替え (indexプロパティ順)
+                pages.sort((a, b) => a.index - b.index);
 
-                const x = parseFloat(sliderEl.value) + (Math.random() - 0.5) * 0.1;
-                createCoin(x, 3.5, -3.2);
+                displayResults(pages, query);
+            } catch (err) {
+                console.error('Wikipedia APIエラー:', err);
+                errorMessage.textContent = 'データの取得中にエラーが発生しました';
+                showState('error');
             }
+        }
 
-            function updateUI() {
-                medalCountEl.textContent = medals;
-                jpCountEl.textContent = `${jpBonus}/10`;
-            }
+        // 検索結果の表示処理
+        function displayResults(pages, query) {
+            resultsGrid.innerHTML = '';
+            resultCount.textContent = `「${query}」の検索結果 (${pages.length}件)`;
 
-            const symbols = ['🍒', '🪙', '💎', '7️⃣', '🎰'];
-            function triggerSlot() {
-                if (isSlotSpinning) return;
-                isSlotSpinning = true;
+            pages.forEach((page, i) => {
+                const title = page.title;
+                const extract = page.extract || '詳細な説明はありません。';
+                const thumbnail = page.thumbnail ? page.thumbnail.source : null;
+                const pageUrl = `https://ja.wikipedia.org/?curid=${page.pageid}`;
 
-                const s1 = document.getElementById('slot1');
-                const s2 = document.getElementById('slot2');
-                const s3 = document.getElementById('slot3');
+                // カード要素作成
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300 transition duration-200 overflow-hidden flex flex-col cursor-pointer animate-fade-in';
+                card.style.animationDelay = `${i * 0.05}s`;
 
-                let count = 0;
-                const interval = setInterval(() => {
-                    s1.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-                    s2.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-                    s3.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-                    sound.playSlotSpin();
-                    count++;
+                // カード内描画
+                card.innerHTML = `
+                    ${thumbnail ? `
+                        <div class="h-40 w-full overflow-hidden bg-slate-100 border-b border-slate-100">
+                            <img src="${thumbnail}" alt="${title}" class="w-full h-full object-cover transition hover:scale-105 duration-300" loading="lazy" onerror="this.style.display='none'">
+                        </div>
+                    ` : ''}
+                    <div class="p-5 flex-1 flex flex-col">
+                        <h3 class="text-base font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition">
+                            ${escapeHtml(title)}
+                        </h3>
+                        <p class="text-xs text-slate-500 line-clamp-3 mb-4 flex-1 leading-relaxed">
+                            ${escapeHtml(extract)}
+                        </p>
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-50 text-xs text-indigo-600 font-medium">
+                            <span>詳細を見る</span>
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </div>
+                    </div>
+                `;
 
-                    if (count > 12) {
-                        clearInterval(interval);
-                        const rand = Math.random();
-                        let result;
-                        if (rand < 0.2) {
-                            result = ['7️⃣', '7️⃣', '7️⃣'];
-                            handleWin('jackpot');
-                        } else if (rand < 0.5) {
-                            result = ['🪙', '🪙', '🪙'];
-                            handleWin('small');
-                        } else {
-                            result = [
-                                symbols[Math.floor(Math.random() * symbols.length)],
-                                symbols[Math.floor(Math.random() * symbols.length)],
-                                symbols[Math.floor(Math.random() * symbols.length)]
-                            ];
-                        }
-                        s1.textContent = result[0];
-                        s2.textContent = result[1];
-                        s3.textContent = result[2];
-                        isSlotSpinning = false;
-                    }
-                }, 90);
-            }
+                // クリックで詳細モーダルを表示
+                card.addEventListener('click', () => {
+                    openModal(title, extract, thumbnail, pageUrl, page.pageid);
+                });
 
-            function handleWin(type) {
-                if (type === 'jackpot') {
-                    sound.playJackpot();
-                    showMessage("🎉 JACKPOT!! 🎉", "+50 MEDALS!");
-                    medals += 50;
-                    for (let i = 0; i < 25; i++) {
-                        setTimeout(() => {
-                            createCoin((Math.random() - 0.5) * 3, 4 + (i * 0.1), -2, 'blue');
-                        }, i * 80);
-                    }
-                } else if (type === 'small') {
-                    sound.playWin();
-                    showMessage("FEVER!", "+10 MEDALS!");
-                    medals += 10;
-                    for (let i = 0; i < 5; i++) {
-                        createCoin((Math.random() - 0.5) * 2, 3.5, -2.5);
-                    }
-                }
-                updateUI();
-            }
-
-            function showMessage(title, sub) {
-                const overlay = document.getElementById('message-overlay');
-                document.getElementById('message-title').textContent = title;
-                document.getElementById('message-sub').textContent = sub;
-
-                overlay.classList.remove('opacity-0', 'scale-50');
-                overlay.classList.add('opacity-100', 'scale-100');
-
-                setTimeout(() => {
-                    overlay.classList.remove('opacity-100', 'scale-100');
-                    overlay.classList.add('opacity-0', 'scale-50');
-                }, 2000);
-            }
-
-            function toggleAuto() {
-                sound.init();
-                isAuto = !isAuto;
-                if (isAuto) {
-                    autoStatusEl.textContent = "ON";
-                    autoStatusEl.classList.replace('text-slate-500', 'text-amber-400');
-                    autoBtn.classList.add('border-amber-400');
-                    autoInterval = setInterval(dropCoin, 600);
-                } else {
-                    autoStatusEl.textContent = "OFF";
-                    autoStatusEl.classList.replace('text-amber-400', 'text-slate-500');
-                    autoBtn.classList.remove('border-amber-400');
-                    clearInterval(autoInterval);
-                }
-            }
-
-            dropBtn.addEventListener('click', dropCoin);
-            autoBtn.addEventListener('click', toggleAuto);
-
-            container.addEventListener('pointerdown', (e) => {
-                sound.init();
-                const rect = container.getBoundingClientRect();
-                const x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
-                const posX = Math.max(-1.8, Math.min(1.8, x * 2.5));
-                sliderEl.value = posX;
+                resultsGrid.appendChild(card);
             });
 
-            // === 6. ループ更新 ===
-            const clock = new THREE.Clock();
-            let time = 0;
+            lucide.createIcons();
+            showState('results');
+        }
 
-            function animate() {
-                requestAnimationFrame(animate);
+        // おまかせ表示（ランダム記事取得）
+        async function fetchRandomArticle() {
+            showState('loading');
 
-                const delta = Math.min(clock.getDelta(), 0.1);
-                time += delta;
+            const params = new URLSearchParams({
+                action: 'query',
+                generator: 'random',
+                grnnamespace: '0', // 標準ページのみ
+                grnlimit: '1',
+                prop: 'pageimages|extracts',
+                exintro: '1',
+                explaintext: '1',
+                piprop: 'thumbnail',
+                pithumbsize: '600',
+                format: 'json',
+                origin: '*'
+            });
 
-                const pusherZ = -2.5 + Math.sin(time * 2) * 0.9;
-                pusherBody.position.z = pusherZ;
-                pusherMesh.position.z = pusherZ;
+            try {
+                const response = await fetch(`${WIKI_API_URL}?${params.toString()}`);
+                const data = await response.json();
 
-                world.step(1 / 60, delta, 3);
+                if (data.query && data.query.pages) {
+                    const page = Object.values(data.query.pages)[0];
+                    const pageUrl = `https://ja.wikipedia.org/?curid=${page.pageid}`;
+                    const thumbnail = page.thumbnail ? page.thumbnail.source : null;
+                    
+                    // 検索バーにタイトルを設定して結果を1件表示
+                    searchInput.value = page.title;
+                    clearBtn.classList.remove('hidden');
+                    
+                    displayResults([page], page.title);
+                    
+                    // 自動的に詳細モーダルもオープン
+                    openModal(page.title, page.extract || '概要はありません。', thumbnail, pageUrl, page.pageid);
+                } else {
+                    showState('empty');
+                }
+            } catch (err) {
+                console.error('ランダム取得エラー:', err);
+                showState('error');
+            }
+        }
 
-                for (let i = coins.length - 1; i >= 0; i--) {
-                    const coin = coins[i];
-                    coin.mesh.position.copy(coin.body.position);
-                    coin.mesh.quaternion.copy(coin.body.quaternion);
+        // 記事詳細モーダルの表示と追加情報の取得
+        async function openModal(title, initialExtract, thumbnail, url, pageid) {
+            modalTitle.textContent = title;
+            modalExtract.textContent = initialExtract;
+            modalExternalLink.href = url;
 
-                    // 手前獲得ゾーン
-                    if (coin.body.position.z > 3.8) {
-                        sound.playCoinGet();
-                        if (Math.abs(coin.body.position.x) < 0.8) {
-                            triggerSlot();
-                        }
+            if (thumbnail) {
+                modalImage.src = thumbnail;
+                modalImageContainer.classList.remove('hidden');
+            } else {
+                modalImageContainer.classList.add('hidden');
+            }
 
-                        const gain = coin.type === 'blue' ? 3 : 1;
-                        medals += gain;
-                        jpBonus = Math.min(10, jpBonus + (coin.type === 'blue' ? 2 : 1));
+            // モーダル表示
+            articleModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
 
-                        if (jpBonus >= 10) {
-                            jpBonus = 0;
-                            handleWin('jackpot');
-                        }
-
-                        updateUI();
-                        removeCoin(i);
-                    } 
-                    else if (coin.body.position.y < -3 || Math.abs(coin.body.position.x) > tableWidth / 2 + 0.5) {
-                        removeCoin(i);
+            // より詳細な全文概要を取得
+            try {
+                const params = new URLSearchParams({
+                    action: 'query',
+                    prop: 'extracts',
+                    pageids: pageid,
+                    explaintext: '1',
+                    exintro: '1',
+                    format: 'json',
+                    origin: '*'
+                });
+                const response = await fetch(`${WIKI_API_URL}?${params.toString()}`);
+                const data = await response.json();
+                
+                if (data.query && data.query.pages && data.query.pages[pageid]) {
+                    const fullExtract = data.query.pages[pageid].extract;
+                    if (fullExtract) {
+                        modalExtract.textContent = fullExtract;
                     }
                 }
-
-                renderer.render(scene, camera);
+            } catch (e) {
+                console.warn('詳細テキストの追加取得に失敗しました:', e);
             }
+        }
 
-            function removeCoin(index) {
-                const coin = coins[index];
-                world.remove(coin.body);
-                scene.remove(coin.mesh);
-                coin.mesh.geometry.dispose();
-                coins.splice(index, 1);
-            }
+        function closeModal() {
+            articleModal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
 
-            animate();
-        };
+        // HTMLエスケープ処理
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
     </script>
 </body>
 </html>
