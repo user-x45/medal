@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>トレジャー・コイン・ドロッパー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <style>
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            overflow: hidden;
+            background-color: #0f172a;
+        }
+        .slot-symbol {
+            transition: transform 0.1s ease-in-out;
+        }
+        /* 発光エフェクト */
+        .glow-gold {
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.6);
+        }
+        .glow-blue {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-between font-sans text-white">
+
+    <!-- ヘッダー / UIパネル -->
+    <header class="w-full max-w-lg p-3 bg-slate-900/90 backdrop-blur border-b border-amber-500/30 flex justify-between items-center z-10 rounded-b-xl shadow-lg">
+        <!-- クレジット (メダル所持数) -->
+        <div class="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-amber-500/50">
+            <span class="text-amber-400 font-bold text-lg">🪙</span>
+            <div>
+                <div class="text-[10px] text-slate-400 font-bold">MEDALS</div>
+                <div id="medal-count" class="text-xl font-black text-amber-300 tracking-wider">100</div>
+            </div>
+        </div>
+
+        <!-- スロットマシン -->
+        <div class="flex items-center gap-1 bg-black/80 px-3 py-1 rounded-xl border-2 border-amber-400 glow-gold">
+            <div id="slot1" class="w-8 h-10 bg-slate-800 rounded flex items-center justify-center text-xl font-bold border border-slate-700">🍒</div>
+            <div id="slot2" class="w-8 h-10 bg-slate-800 rounded flex items-center justify-center text-xl font-bold border border-slate-700">🎰</div>
+            <div id="slot3" class="w-8 h-10 bg-slate-800 rounded flex items-center justify-center text-xl font-bold border border-slate-700">7️⃣</div>
+        </div>
+
+        <!-- JPポイントメーター -->
+        <div class="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-blue-500/50">
+            <span class="text-blue-400 font-bold text-lg">💎</span>
+            <div>
+                <div class="text-[10px] text-slate-400 font-bold">JP BONUS</div>
+                <div id="jp-count" class="text-xl font-black text-blue-300 tracking-wider">0/10</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- メイン3Dゲーム画面 (Canvas) -->
+    <main id="game-container" class="relative w-full flex-1 max-w-lg overflow-hidden flex items-center justify-center">
+        <!-- 中央のアナウンスメッセージOverlay -->
+        <div id="message-overlay" class="absolute top-1/4 pointer-events-none transition-all duration-300 opacity-0 transform scale-50 z-20 text-center">
+            <h1 id="message-title" class="text-4xl font-black italic text-yellow-300 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] stroke-black">JACKPOT!</h1>
+            <p id="message-sub" class="text-lg font-bold text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">+50 MEDALS</p>
+        </div>
+
+        <!-- コイン投入用の左右ガイダーガイド -->
+        <div class="absolute bottom-2 left-0 right-0 flex justify-between px-6 pointer-events-none z-10 opacity-40">
+            <span class="text-xs text-amber-300">◄ レバー操作/タップで位置指定</span>
+            <span class="text-xs text-amber-300">位置指定 ►</span>
+        </div>
+    </main>
+
+    <!-- フッター / コントローラー -->
+    <footer class="w-full max-w-lg p-4 bg-slate-900/90 backdrop-blur border-t border-slate-700 flex flex-col gap-3 z-10 rounded-t-2xl">
+        <!-- 投入位置指定スライダー -->
+        <div class="flex items-center gap-3 px-2">
+            <span class="text-xs font-bold text-slate-400">投入位置</span>
+            <input id="position-slider" type="range" min="-1.8" max="1.8" step="0.1" value="0" 
+                   class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400">
+        </div>
+
+        <!-- 投入ボタン -->
+        <div class="flex gap-2">
+            <button id="drop-btn" class="flex-1 py-4 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 active:scale-95 font-black text-slate-900 text-xl rounded-xl shadow-lg border-b-4 border-amber-700 transition flex items-center justify-center gap-2">
+                <span>🪙</span> メダルを投下！
+            </button>
+            <button id="auto-btn" class="px-4 py-4 bg-slate-800 hover:bg-slate-700 active:scale-95 font-bold text-slate-300 text-xs rounded-xl border border-slate-600 transition flex flex-col items-center justify-center">
+                <span>AUTO</span>
+                <span id="auto-status" class="text-[10px] text-slate-500">OFF</span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Three.js & Cannon.js ロジック -->
+    <script>
+        window.onload = function() {
+            // === 1. ゲームの状態管理 ===
+            let medals = 100;
+            let jpBonus = 0;
+            let isAuto = false;
+            let autoInterval = null;
+            let isSlotSpinning = false;
+
+            const medalCountEl = document.getElementById('medal-count');
+            const jpCountEl = document.getElementById('jp-count');
+            const sliderEl = document.getElementById('position-slider');
+            const dropBtn = document.getElementById('drop-btn');
+            const autoBtn = document.getElementById('auto-btn');
+            const autoStatusEl = document.getElementById('auto-status');
+            const container = document.getElementById('game-container');
+
+            // === 2. Cannon.js (物理演算) & Three.js (描画) の初期化 ===
+            const world = new CANNON.World();
+            world.gravity.set(0, -18, 0); // 重力を少し強めに設定して重厚感を出す
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0f19);
+
+            const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 8, 9);
+            camera.lookAt(0, 1, -1);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // リサイズ対応
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            });
+
+            // === 3. ライティング ===
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfff5ea, 0.8);
+            dirLight.position.set(5, 12, 7);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 25;
+            dirLight.shadow.camera.left = -6;
+            dirLight.shadow.camera.right = 6;
+            dirLight.shadow.camera.top = 6;
+            dirLight.shadow.camera.bottom = -6;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0xf59e0b, 1, 10);
+            pointLight.position.set(0, 4, -2);
+            scene.add(pointLight);
+
+            // === 4. マテリアル設定 ===
+            const physicsMaterial = new CANNON.Material("slipperyMaterial");
+            const coinContactMaterial = new CANNON.ContactMaterial(
+                physicsMaterial,
+                physicsMaterial,
+                { friction: 0.15, restitution: 0.2 }
+            );
+            world.addContactMaterial(coinContactMaterial);
+
+            // === 5. フィールドの作成 (ステージ, プッシャー) ===
+            const tableWidth = 5;
+            const tableDepth = 7;
+
+            // 物理: メイン床 (下段)
+            const mainFloorShape = new CANNON.Box(new CANNON.Vec3(tableWidth / 2, 0.2, tableDepth / 2));
+            const mainFloorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
+            mainFloorBody.addShape(mainFloorShape);
+            mainFloorBody.position.set(0, -0.2, 0.5);
+            world.addBody(mainFloorBody);
+
+            // 視覚: メイン床
+            const mainFloorGeo = new THREE.BoxGeometry(tableWidth, 0.4, tableDepth);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2, metalness: 0.5 });
+            const mainFloorMesh = new THREE.Mesh(mainFloorGeo, tableMat);
+            mainFloorMesh.position.set(0, -0.2, 0.5);
+            mainFloorMesh.receiveShadow = true;
+            scene.add(mainFloorMesh);
+
+            // 物理 & 視覚: プッシャー (動く段)
+            const pusherWidth = tableWidth - 0.2;
+            const pusherHeight = 0.8;
+            const pusherDepth = 3;
+
+            const pusherShape = new CANNON.Box(new CANNON.Vec3(pusherWidth / 2, pusherHeight / 2, pusherDepth / 2));
+            const pusherBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
+            pusherBody.addShape(pusherShape);
+            pusherBody.position.set(0, 0.4, -2.5);
+            world.addBody(pusherBody);
+
+            const pusherGeo = new THREE.BoxGeometry(pusherWidth, pusherHeight, pusherDepth);
+            const pusherMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.1, metalness: 0.8 });
+            const pusherMesh = new THREE.Mesh(pusherGeo, pusherMat);
+            pusherMesh.position.copy(pusherBody.position);
+            pusherMesh.castShadow = true;
+            pusherMesh.receiveShadow = true;
+            scene.add(pusherMesh);
+
+            // サイドウォール (落下防止の壁)
+            const wallShape = new CANNON.Box(new CANNON.Vec3(0.1, 1, tableDepth / 2 + 1));
+            
+            const leftWallBody = new CANNON.Body({ mass: 0 });
+            leftWallBody.addShape(wallShape);
+            leftWallBody.position.set(-tableWidth / 2 - 0.1, 0.8, 0);
+            world.addBody(leftWallBody);
+
+            const rightWallBody = new CANNON.Body({ mass: 0 });
+            rightWallBody.addShape(wallShape);
+            rightWallBody.position.set(tableWidth / 2 + 0.1, 0.8, 0);
+            world.addBody(rightWallBody);
+
+            // 壁の視覚化 (アクリル板風)
+            const wallGeo = new THREE.BoxGeometry(0.1, 1.5, tableDepth + 2);
+            const wallMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, roughness: 0.1 });
+            
+            const leftWallMesh = new THREE.Mesh(wallGeo, wallMat);
+            leftWallMesh.position.copy(leftWallBody.position);
+            scene.add(leftWallMesh);
+
+            const rightWallMesh = new THREE.Mesh(wallGeo, wallMat);
+            rightWallMesh.position.copy(rightWallBody.position);
+            scene.add(rightWallMesh);
+
+            // スロットチャッカー (手前の穴)
+            const chackerGeo = new THREE.BoxGeometry(1.2, 0.1, 0.4);
+            const chackerMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0x7f1d1d });
+            const chackerMesh = new THREE.Mesh(chackerGeo, chackerMat);
+            chackerMesh.position.set(0, 0.05, 3.2);
+            scene.add(chackerMesh);
+
+            // === 6. コインの管理 ===
+            const coins = []; // { body, mesh, type }
+            const coinRadius = 0.35;
+            const coinHeight = 0.08;
+
+            const coinGeo = new THREE.CylinderGeometry(coinRadius, coinRadius, coinHeight, 20);
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.2 });
+            const blueMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.8, roughness: 0.2 });
+
+            function createCoin(x, y, z, type = 'normal') {
+                const coinShape = new CANNON.Cylinder(coinRadius, coinRadius, coinHeight, 16);
+                // Cannonのシリンダーは向きが異なるため回転クォータニオンを設定
+                const q = new CANNON.Quaternion();
+                q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+
+                const coinBody = new CANNON.Body({
+                    mass: 0.3,
+                    material: physicsMaterial,
+                    linearDamping: 0.3,
+                    angularDamping: 0.3
+                });
+                coinBody.addShape(coinShape, new CANNON.Vec3(), q);
+                coinBody.position.set(x, y, z);
+
+                // 初期状態に微小なランダム回転を与える
+                coinBody.quaternion.setFromEuler(
+                    (Math.random() - 0.5) * 0.1,
+                    Math.random() * Math.PI,
+                    (Math.random() - 0.5) * 0.1
+                );
+
+                world.addBody(coinBody);
+
+                const coinMesh = new THREE.Mesh(coinGeo, type === 'blue' ? blueMat : goldMat);
+                coinMesh.castShadow = true;
+                coinMesh.receiveShadow = true;
+                scene.add(coinMesh);
+
+                coins.push({ body: coinBody, mesh: coinMesh, type: type });
+            }
+
+            // 初期配置のコイン群を生成
+            function initCoins() {
+                // 下段に敷き詰める
+                for (let i = 0; i < 40; i++) {
+                    const x = (Math.random() - 0.5) * (tableWidth - 0.8);
+                    const z = Math.random() * (tableDepth / 2) + 0.5;
+                    createCoin(x, 0.2 + (i * 0.02), z);
+                }
+                // プッシャーの上に少し配置
+                for (let i = 0; i < 15; i++) {
+                    const x = (Math.random() - 0.5) * (tableWidth - 1.2);
+                    const z = -3 + Math.random() * 1.0;
+                    createCoin(x, 1.0 + (i * 0.02), z);
+                }
+            }
+            initCoins();
+
+            // === 7. ゲームアクション・ロジック ===
+            function dropCoin() {
+                if (medals <= 0) {
+                    showMessage("MEDALS EMPTY!", "メダルがなくなりました");
+                    if (isAuto) toggleAuto();
+                    return;
+                }
+
+                medals--;
+                updateUI();
+
+                const x = parseFloat(sliderEl.value) + (Math.random() - 0.5) * 0.1;
+                // 上部ガイドから投下
+                createCoin(x, 3.5, -3.2);
+            }
+
+            function updateUI() {
+                medalCountEl.textContent = medals;
+                jpCountEl.textContent = `${jpBonus}/10`;
+            }
+
+            // スロットアクション
+            const symbols = ['🍒', '🪙', '💎', '7️⃣', '🎰'];
+            function triggerSlot() {
+                if (isSlotSpinning) return;
+                isSlotSpinning = true;
+
+                const s1 = document.getElementById('slot1');
+                const s2 = document.getElementById('slot2');
+                const s3 = document.getElementById('slot3');
+
+                let count = 0;
+                const interval = setInterval(() => {
+                    s1.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                    s2.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                    s3.textContent = symbols[Math.floor(Math.random() * symbols.length)];
+                    count++;
+
+                    if (count > 15) {
+                        clearInterval(interval);
+                        // 確率で当たりを判定
+                        const rand = Math.random();
+                        let result;
+                        if (rand < 0.2) { // 20% 777 (Jackpot)
+                            result = ['7️⃣', '7️⃣', '7️⃣'];
+                            handleWin('jackpot');
+                        } else if (rand < 0.5) { // 30% 小当たり
+                            result = ['🪙', '🪙', '🪙'];
+                            handleWin('small');
+                        } else {
+                            // はずれ
+                            result = [
+                                symbols[Math.floor(Math.random() * symbols.length)],
+                                symbols[Math.floor(Math.random() * symbols.length)],
+                                symbols[Math.floor(Math.random() * symbols.length)]
+                            ];
+                        }
+                        s1.textContent = result[0];
+                        s2.textContent = result[1];
+                        s3.textContent = result[2];
+                        isSlotSpinning = false;
+                    }
+                }, 80);
+            }
+
+            function handleWin(type) {
+                if (type === 'jackpot') {
+                    showMessage("🎉 JACKPOT!! 🎉", "+50 MEDALS!");
+                    medals += 50;
+                    // 上空から大量コイン発生
+                    for (let i = 0; i < 25; i++) {
+                        setTimeout(() => {
+                            createCoin((Math.random() - 0.5) * 3, 4 + (i * 0.1), -2, 'blue');
+                        }, i * 80);
+                    }
+                } else if (type === 'small') {
+                    showMessage("FEVER!", "+10 MEDALS!");
+                    medals += 10;
+                    for (let i = 0; i < 5; i++) {
+                        createCoin((Math.random() - 0.5) * 2, 3.5, -2.5);
+                    }
+                }
+                updateUI();
+            }
+
+            function showMessage(title, sub) {
+                const overlay = document.getElementById('message-overlay');
+                document.getElementById('message-title').textContent = title;
+                document.getElementById('message-sub').textContent = sub;
+
+                overlay.classList.remove('opacity-0', 'scale-50');
+                overlay.classList.add('opacity-100', 'scale-100');
+
+                setTimeout(() => {
+                    overlay.classList.remove('opacity-100', 'scale-100');
+                    overlay.classList.add('opacity-0', 'scale-50');
+                }, 2000);
+            }
+
+            function toggleAuto() {
+                isAuto = !isAuto;
+                if (isAuto) {
+                    autoStatusEl.textContent = "ON";
+                    autoStatusEl.classList.replace('text-slate-500', 'text-amber-400');
+                    autoBtn.classList.add('border-amber-400');
+                    autoInterval = setInterval(() => {
+                        dropCoin();
+                    }, 600);
+                } else {
+                    autoStatusEl.textContent = "OFF";
+                    autoStatusEl.classList.replace('text-amber-400', 'text-slate-500');
+                    autoBtn.classList.remove('border-amber-400');
+                    clearInterval(autoInterval);
+                }
+            }
+
+            // イベントリスナー登録
+            dropBtn.addEventListener('click', dropCoin);
+            autoBtn.addEventListener('click', toggleAuto);
+
+            // タップ/クリックで直接位置を指定して投下
+            container.addEventListener('pointerdown', (e) => {
+                const rect = container.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+                // X座標をスライダーの範囲 (-1.8 〜 1.8) に変換
+                const posX = Math.max(-1.8, Math.min(1.8, x * 2.5));
+                sliderEl.value = posX;
+            });
+
+            // === 8. アニメーション＆物理ループ ===
+            const clock = new THREE.Clock();
+            let time = 0;
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                const delta = Math.min(clock.getDelta(), 0.1);
+                time += delta;
+
+                // 1. プッシャーの前後移動 (Math.sinでなめらかに動かす)
+                const pusherZ = -2.5 + Math.sin(time * 2) * 0.9;
+                pusherBody.position.z = pusherZ;
+                pusherMesh.position.z = pusherZ;
+
+                // 2. 物理エンジンのステップ更新
+                world.step(1 / 60, delta, 3);
+
+                // 3. コインの位置・回転を物理ボディに同期 ＆ 落下判定
+                for (let i = coins.length - 1; i >= 0; i--) {
+                    const coin = coins[i];
+                    coin.mesh.position.copy(coin.body.position);
+                    coin.mesh.quaternion.copy(coin.body.quaternion);
+
+                    // 手前（プレイヤー側）に落ちた場合 -> メダル獲得！
+                    if (coin.body.position.z > 3.8) {
+                        // 中央のチャッカー付近に落ちたか確認
+                        if (Math.abs(coin.body.position.x) < 0.8) {
+                            triggerSlot();
+                        }
+
+                        // 獲得処理
+                        const gain = coin.type === 'blue' ? 3 : 1;
+                        medals += gain;
+                        jpBonus = Math.min(10, jpBonus + (coin.type === 'blue' ? 2 : 1));
+
+                        // JP満タン判定
+                        if (jpBonus >= 10) {
+                            jpBonus = 0;
+                            handleWin('jackpot');
+                        }
+
+                        updateUI();
+                        removeCoin(i);
+                    } 
+                    // 左右の落ち（落下ロス）または下方向に大きく落ちた場合
+                    else if (coin.body.position.y < -3 || Math.abs(coin.body.position.x) > tableWidth / 2 + 0.5) {
+                        removeCoin(i);
+                    }
+                }
+
+                renderer.render(scene, camera);
+            }
+
+            function removeCoin(index) {
+                const coin = coins[index];
+                world.remove(coin.body);
+                scene.remove(coin.mesh);
+                coin.mesh.geometry.dispose();
+                coins.splice(index, 1);
+            }
+
+            // アニメーション開始
+            animate();
+        };
+    </script>
+</body>
+</html>
